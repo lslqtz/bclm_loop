@@ -6,6 +6,7 @@ build:
 	strip .build/apple/Products/Release/bclm_loop
 
 install: build
+	mkdir -p "$(bindir)"
 	install ".build/apple/Products/Release/bclm_loop" "$(bindir)"
 
 uninstall:
