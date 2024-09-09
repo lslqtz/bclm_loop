@@ -46,6 +46,15 @@ SUBCOMMANDS:
 
 The program must be run as root.
 
+## Migrate
+
+If you are migrating from upstream bclm or older version (ver < 1.0) of bclm_loop.
+
+```
+$ sudo bclm unpersist
+$ sudo rm -f /Library/LaunchDaemon/com.zackelia.bclm_loop.plist
+```
+
 ## Persistence
 
 It can run in the background to maintain battery levels. Just create a new plist in `/Library/LaunchDaemons` and load it via `launchctl`. 
