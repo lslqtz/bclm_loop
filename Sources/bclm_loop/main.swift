@@ -3,6 +3,7 @@ import Foundation
 import IOKit.ps
 import IOKit.pwr_mgt
 
+var maxBatteryLevel = 80
 var chwaExist = true
 var chwa_key = SMCKit.getKey("CHWA", type: DataTypes.UInt8)
 var ch0b_key = SMCKit.getKey("CH0B", type: DataTypes.UInt8)
@@ -106,7 +107,7 @@ struct BCLMLoop: ParsableCommand {
                 try SMCKit.writeData(ch0c_key, data: ch0x_bytes_limit)
             }
         }
-
+        
         func run() {
             CheckCHWAExist()
 
@@ -133,7 +134,7 @@ struct BCLMLoop: ParsableCommand {
                 var needLimit = true
 
                 if (chargeState != nil && currentBattLevelInt >= 0) {
-                    if (isACPower == true && currentBattLevelInt < 78) {
+                    if (isACPower == true && currentBattLevelInt < maxBatteryLevel) {
                         needLimit = false
                     }
                 }
