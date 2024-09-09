@@ -4,18 +4,18 @@
 import PackageDescription
 
 let package = Package(
-    name: "bclm",
+    name: "bclm_loop",
     dependencies: [
         .package(url: "https://github.com/apple/swift-argument-parser", from: "0.1.0")
     ],
     targets: [
         .target(
-            name: "bclm",
+            name: "bclm_loop",
             dependencies: [
                 .product(name: "ArgumentParser", package: "swift-argument-parser")
             ]),
         .testTarget(
             name: "bclmTests",
-            dependencies: ["bclm"]),
+            dependencies: ["bclm_loop"]),
     ]
 )

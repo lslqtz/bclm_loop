@@ -1,10 +1,8 @@
 import Foundation
 
 let launchctl = "/bin/launchctl"
-let plist = "com.zackelia.bclm.plist"
+let plist = "com.lslqtz.bclm_loop.plist"
 let plist_path = "/Library/LaunchDaemons/\(plist)"
-let plist_loop = "com.zackelia.bclm_loop.plist"
-let plist_path_loop = "/Library/LaunchDaemons/\(plist_loop)"
 
 struct Preferences: Codable {
     var Label: String
@@ -13,13 +11,13 @@ struct Preferences: Codable {
     var ProgramArguments: [String]
 }
 
-func persist(_ enable: Bool, _ isLoop: Bool) {
-    if isPersistent(isLoop) && enable {
-        fputs("Already persisting! (isLoop: " + (isLoop ? "True" : "False") + ")\n", stderr)
+func persist(_ enable: Bool) {
+    if isPersistent() && enable {
+        fputs("Already persisting!\n", stderr)
         return
     }
-    if !isPersistent(isLoop) && !enable {
-        fputs("Already not persisting! (isLoop: " + (isLoop ? "True" : "False") + ")\n", stderr)
+    if !isPersistent() && !enable {
+        fputs("Already not persisting!\n", stderr)
         return
     }
 
@@ -34,7 +32,7 @@ func persist(_ enable: Bool, _ isLoop: Bool) {
     }
 
     process.launchPath = launchctl
-    process.arguments = [load, isLoop ? plist_path_loop : plist_path]
+    process.arguments = [load, plist_path]
     process.standardOutput = pipe
     process.standardError = pipe
 
@@ -49,14 +47,14 @@ func persist(_ enable: Bool, _ isLoop: Bool) {
 
     if !enable {
         do {
-            try FileManager.default.removeItem(at: URL(fileURLWithPath: isLoop ? plist_path_loop : plist_path))
+            try FileManager.default.removeItem(at: URL(fileURLWithPath: plist_path))
         } catch {
             print(error)
         }
     }
 }
 
-func isPersistent(_ isLoop: Bool) -> Bool {
+func isPersistent() -> Bool {
     let process = Process()
     let pipe = Pipe()
 
@@ -70,18 +68,17 @@ func isPersistent(_ isLoop: Bool) -> Bool {
     let data = pipe.fileHandleForReading.readDataToEndOfFile()
     let output = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
 
-    if (output != nil && output!.contains(isLoop ? plist_loop : plist)) {
+    if (output != nil && output!.contains(plist)) {
         return true
     } else {
         return false
     }
 }
 
-func updatePlist(_ value: Int, _ isLoop: Bool) {
+func updatePlist() {
     let preferences =
-            isLoop
-            ? Preferences(
-                Label: plist_loop,
+            Preferences(
+                Label: plist,
                 RunAtLoad: true,
                 KeepAlive: true,
                 ProgramArguments: [
@@ -89,18 +86,8 @@ func updatePlist(_ value: Int, _ isLoop: Bool) {
                     "loop"
                 ]
             )
-            : Preferences(
-                Label: plist,
-                RunAtLoad: true,
-                KeepAlive: false,
-                ProgramArguments: [
-                    Bundle.main.executablePath! as String,
-                    "write",
-                    String(value)
-                ]
-            )
 
-    let path = URL(fileURLWithPath: isLoop ? plist_path_loop : plist_path)
+    let path = URL(fileURLWithPath: plist_path)
 
     let encoder = PropertyListEncoder()
     encoder.outputFormat = .xml

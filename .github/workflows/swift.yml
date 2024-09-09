@@ -22,5 +22,5 @@ jobs:
 
     - uses: actions/upload-artifact@v3
       with:
-        name: bclm
-        path: .build/apple/Products/Release/bclm
+        name: bclm_loop
+        path: .build/apple/Products/Release/bclm_loop
