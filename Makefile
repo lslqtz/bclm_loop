@@ -12,10 +12,6 @@ install: build
 uninstall:
 	rm -rf "$(bindir)/bclm_loop"
 
-test:
-	swift build -c debug --build-tests
-	sudo swift test --skip-build
-
 clean:
 	rm -rf .build
 

@@ -3,11 +3,14 @@ import Foundation
 import IOKit.ps
 import IOKit.pwr_mgt
 
-var maxBatteryLevel = 80
-var chwaExist = true
+var defaultTargetBatteryLevel = 80
+var targetBatteryLevelRange = [5, 95]
+var chwaExist = false
+
 var chwa_key = SMCKit.getKey("CHWA", type: DataTypes.UInt8)
 var ch0b_key = SMCKit.getKey("CH0B", type: DataTypes.UInt8)
 var ch0c_key = SMCKit.getKey("CH0C", type: DataTypes.UInt8)
+var ch0i_key = SMCKit.getKey("CH0I", type: DataTypes.UInt8)
 var aclc_key = SMCKit.getKey("ACLC", type: DataTypes.UInt8)
 
 var chwa_bytes_unlimit: SMCBytes = (
@@ -38,14 +41,28 @@ var ch0x_bytes_limit: SMCBytes = (
     UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0),
     UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0)
 )
-var aclc_bytes_full: SMCBytes = (
+var ch0i_bytes_charge: SMCBytes = (
+    UInt8(1), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0),
+    UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0),
+    UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0),
+    UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0),
+    UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0)
+)
+var ch0i_bytes_discharge: SMCBytes = (
+    UInt8(1), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0),
+    UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0),
+    UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0),
+    UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0),
+    UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0)
+)
+var aclc_bytes_green: SMCBytes = (
     UInt8(3), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0),
     UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0),
     UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0),
     UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0),
     UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0)
 )
-var aclc_bytes_charging: SMCBytes = (
+var aclc_bytes_red: SMCBytes = (
     UInt8(4), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0),
     UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0),
     UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0),
@@ -64,13 +81,16 @@ struct BCLMLoop: ParsableCommand {
     static let configuration = CommandConfiguration(
             commandName: "bclm_loop",
             abstract: "Battery Charge Level Max (BCLM) Utility.",
-            version: "0.1.0",
+            version: "1.0",
             subcommands: [Loop.self, Persist.self, Unpersist.self])
 
     struct Loop: ParsableCommand {
         static let configuration = CommandConfiguration(
-            abstract: "Loop bclm on battery level 80%.")
+            abstract: "Loop bclm on target battery level (Default: \(defaultTargetBatteryLevel)%).")
         
+        @Argument(help: "The value to set (\(targetBatteryLevelRange[0])-\(targetBatteryLevelRange[1])). Firmware-based battery level limits are not supported if not set to 80.")
+        var targetBatteryLevel: Int = defaultTargetBatteryLevel
+
         func validate() throws {
             guard getuid() == 0 else {
                 throw ValidationError("Must run as root.")
@@ -79,37 +99,79 @@ struct BCLMLoop: ParsableCommand {
 #if arch(x86_64)
             throw ValidationError("Only support Apple Silicon.")
 #endif
-        }
-
-        func CheckCHWAExist() {
-            do {
-                _ = try SMCKit.readData(chwa_key)
-                chwaExist = true
-            } catch {
-                chwaExist = false
+            
+            guard targetBatteryLevel >= targetBatteryLevelRange[0] && targetBatteryLevel <= targetBatteryLevelRange[1] else {
+                throw ValidationError("Value must be between \(targetBatteryLevelRange[0]) and \(targetBatteryLevelRange[1]).")
             }
         }
 
-        func EnableCharging() throws {
+        func CheckCHWAExist() -> Bool {
+            if targetBatteryLevel != defaultTargetBatteryLevel {
+                return false
+            }
+
+            do {
+                _ = try SMCKit.readData(chwa_key)
+            } catch {
+                return false
+            }
+
+            return true
+        }
+
+        func AllowCharging(status: Bool) throws {
             if chwaExist {
-                try SMCKit.writeData(chwa_key, data: chwa_bytes_unlimit)
+                if status {
+                    try SMCKit.writeData(chwa_key, data: chwa_bytes_unlimit)
+                } else {
+                    try SMCKit.writeData(chwa_key, data: chwa_bytes_limit)
+                }
             } else {
-                try SMCKit.writeData(ch0b_key, data: ch0x_bytes_unlimit)
-                try SMCKit.writeData(ch0c_key, data: ch0x_bytes_unlimit)
+                if status {
+                    try SMCKit.writeData(ch0b_key, data: ch0x_bytes_unlimit)
+                    try SMCKit.writeData(ch0c_key, data: ch0x_bytes_unlimit)
+                } else {
+                    try SMCKit.writeData(ch0b_key, data: ch0x_bytes_limit)
+                    try SMCKit.writeData(ch0c_key, data: ch0x_bytes_limit)
+                }
+            }
+        }
+
+        func ForceDischarging(status: Bool) throws {
+            if chwaExist {
+                return
+            }
+
+            if status {
+                try SMCKit.writeData(ch0i_key, data: ch0i_bytes_discharge)
+            } else {
+                try SMCKit.writeData(ch0i_key, data: ch0i_bytes_charge)
             }
         }
         
-        func DisableCharging() throws {
-            if chwaExist {
-                try SMCKit.writeData(chwa_key, data: chwa_bytes_limit)
-            } else {
-                try SMCKit.writeData(ch0b_key, data: ch0x_bytes_limit)
-                try SMCKit.writeData(ch0c_key, data: ch0x_bytes_limit)
+        func ChangeMagSafeLED(color: String) throws {
+            switch color {
+            case "Green":
+                try SMCKit.writeData(aclc_key, data: aclc_bytes_green)
+                break
+            case "Red":
+                try SMCKit.writeData(aclc_key, data: aclc_bytes_red)
+                break
+            case "Unknown": fallthrough
+            default:
+                try SMCKit.writeData(aclc_key, data: aclc_bytes_unknown)
+                break
             }
         }
         
         func run() {
-            CheckCHWAExist()
+            if CheckCHWAExist() {
+                chwaExist = true
+                print("Use firmware-based battery level limits. (SMCKey \"CHWA\" found)")
+            } else {
+                chwaExist = false
+                print("Use software-based battery level limits. (SMCKey \"CHWA\" not found)")
+            }
 
             var pmStatus : IOReturn? = nil
             var assertionID : IOPMAssertionID = IOPMAssertionID(0)
@@ -134,7 +196,7 @@ struct BCLMLoop: ParsableCommand {
                 var needLimit = true
 
                 if (chargeState != nil && currentBattLevelInt >= 0) {
-                    if (isACPower == true && currentBattLevelInt < maxBatteryLevel) {
+                    if (isACPower == true && currentBattLevelInt < targetBatteryLevel) {
                         needLimit = false
                     }
                 }
@@ -177,7 +239,8 @@ struct BCLMLoop: ParsableCommand {
                         
                         // Change charging status (If current charging status is known).
                         if (needLimit == true)  {
-                            try DisableCharging()
+                            try AllowCharging(status: false)
+                            //try ForceDischarging(status: true)
                             print("Limit status has changed! (Limit)")
                             
                             // A: The battery is "full", sleep will no longer be prevented (If currently prevented).
@@ -187,7 +250,8 @@ struct BCLMLoop: ParsableCommand {
                                 assertionID = IOPMAssertionID(0)
                             }
                         } else if (needLimit == false) {
-                            try EnableCharging()
+                            try AllowCharging(status: true)
+                            //try ForceDischarging(status: false)
                             print("Limit status has changed! (Unlimit)")
                             
                             // The battery is not "full", sleep will be prevented (If not currently prevented).
@@ -203,13 +267,13 @@ struct BCLMLoop: ParsableCommand {
                         
                         // Change MagSafe LED status.
                         if (isCharging == false) {
-                            try SMCKit.writeData(aclc_key, data: aclc_bytes_full)
+                            try ChangeMagSafeLED(color: "Green")
                             print("MagSafe LED status has changed! (Full)")
                         } else if (isCharging == true) {
-                            try SMCKit.writeData(aclc_key, data: aclc_bytes_charging)
+                            try ChangeMagSafeLED(color: "Red")
                             print("MagSafe LED status has changed! (Charging)")
                         } else {
-                            try SMCKit.writeData(aclc_key, data: aclc_bytes_unknown)
+                            try ChangeMagSafeLED(color: "Unknown")
                         }
                         
                         SMCKit.close()
@@ -226,8 +290,11 @@ struct BCLMLoop: ParsableCommand {
 
     struct Persist: ParsableCommand {
         static let configuration = CommandConfiguration(
-            abstract: "Persists bclm loop service on reboot.")
-
+            abstract: "Persists bclm loop service.")
+        
+        @Argument(help: "The value to set (\(targetBatteryLevelRange[0])-\(targetBatteryLevelRange[1])). Firmware-based battery level limits are not supported if not set to 80.")
+        var targetBatteryLevel: Int = defaultTargetBatteryLevel
+    
         func validate() throws {
             guard getuid() == 0 else {
                 throw ValidationError("Must run as root.")
@@ -236,17 +303,21 @@ struct BCLMLoop: ParsableCommand {
 #if arch(x86_64)
             throw ValidationError("Only support Apple Silicon.")
 #endif
+            
+            guard targetBatteryLevel >= targetBatteryLevelRange[0] && targetBatteryLevel <= targetBatteryLevelRange[1] else {
+                throw ValidationError("Value must be between \(targetBatteryLevelRange[0]) and \(targetBatteryLevelRange[1]).")
+            }
         }
 
         func run() {
-            updatePlist()
+            updatePlist(targetBatteryLevel: targetBatteryLevel)
             persist(true)
         }
     }
 
     struct Unpersist: ParsableCommand {
         static let configuration = CommandConfiguration(
-            abstract: "Unpersists bclm on reboot.")
+            abstract: "Unpersists bclm loop service.")
 
         func validate() throws {
             guard getuid() == 0 else {
@@ -260,6 +331,7 @@ struct BCLMLoop: ParsableCommand {
 
         func run() {
             persist(false)
+            removePlist()
         }
     }
 }

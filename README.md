@@ -4,6 +4,8 @@ bclm_loop is a background looping utility that maintains the battery level of Ap
 
 The purpose of limiting the battery's max charge is to prolong battery health and to prevent damage to the battery. Various sources show that the optimal charge range for operation of lithium-ion batteries is between 40% and 80%, commonly referred to as the 40-80 rule [[1]](https://www.apple.com/batteries/why-lithium-ion/)[[2]](https://www.eeworldonline.com/why-you-should-stop-fully-charging-your-smartphone-now/)[[3]](https://www.csmonitor.com/Technology/Tech/2014/0103/40-80-rule-New-tip-for-extending-battery-life). This project is especially helpful to people who leave their Macs on the charger all day, every day.
 
+To use it, Apple Optimized Battery Charging must be turned off. It will first try to use firmware based battery level limits on supported firmware.
+
 This project was forked from upstream (https://github.com/zackelia/bclm).
 
 ## Installation
@@ -12,7 +14,6 @@ This project was forked from upstream (https://github.com/zackelia/bclm).
 
 ```
 $ make build
-$ make test
 $ sudo make install
 ```
 
@@ -37,9 +38,9 @@ OPTIONS:
   -h, --help              Show help information.
 
 SUBCOMMANDS:
-  loop                    Loop bclm on battery level 80%.
-  persist                 Persists bclm loop service on reboot.
-  unpersist               Unpersists bclm on reboot.
+  loop                    Loop bclm on target battery level (Default: 80%).
+  persist                 Persists bclm loop service.
+  unpersist               Unpersists bclm loop service.
 
   See 'bclm_loop help <subcommand>' for detailed help.
 ```

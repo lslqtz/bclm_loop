@@ -44,14 +44,6 @@ func persist(_ enable: Bool) {
     if (output != nil && !output!.isEmpty) {
         print(output!)
     }
-
-    if !enable {
-        do {
-            try FileManager.default.removeItem(at: URL(fileURLWithPath: plist_path))
-        } catch {
-            print(error)
-        }
-    }
 }
 
 func isPersistent() -> Bool {
@@ -75,7 +67,7 @@ func isPersistent() -> Bool {
     }
 }
 
-func updatePlist() {
+func updatePlist(targetBatteryLevel: Int) {
     let preferences =
             Preferences(
                 Label: plist,
@@ -83,7 +75,8 @@ func updatePlist() {
                 KeepAlive: true,
                 ProgramArguments: [
                     Bundle.main.executablePath! as String,
-                    "loop"
+                    "loop",
+                    String(targetBatteryLevel),
                 ]
             )
 
@@ -95,6 +88,14 @@ func updatePlist() {
     do {
         let data = try encoder.encode(preferences)
         try data.write(to: path)
+    } catch {
+        print(error)
+    }
+}
+
+func removePlist() {
+    do {
+        try FileManager.default.removeItem(at: URL(fileURLWithPath: plist_path))
     } catch {
         print(error)
     }
