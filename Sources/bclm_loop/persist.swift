@@ -25,7 +25,7 @@ func persist(_ enable: Bool) {
     let pipe = Pipe()
 
     var load: String
-    if (enable) {
+    if enable {
         load = "load"
     } else {
         load = "unload"
@@ -41,7 +41,7 @@ func persist(_ enable: Bool) {
     let data = pipe.fileHandleForReading.readDataToEndOfFile()
     let output = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
 
-    if (output != nil && !output!.isEmpty) {
+    if output != nil && !output!.isEmpty {
         print(output!)
     }
 }
@@ -60,7 +60,7 @@ func isPersistent() -> Bool {
     let data = pipe.fileHandleForReading.readDataToEndOfFile()
     let output = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
 
-    if (output != nil && output!.contains(plist)) {
+    if output != nil && output!.contains(plist) {
         return true
     } else {
         return false

@@ -4,6 +4,7 @@ import IOKit.ps
 import IOKit.pwr_mgt
 
 var defaultTargetBatteryLevel = 80
+var defaultBatteryLevelMargin = 2
 var targetBatteryLevelRange = [5, 95]
 var chwaExist = false
 
@@ -195,12 +196,15 @@ struct BCLMLoop: ParsableCommand {
                 // Avoid failure by repeating maxTryCount times, and avoid opening SMC each time to affect performance.
                 var needLimit = true
 
-                if (chargeState != nil && currentBattLevelInt >= 0) {
-                    if (isACPower == true && currentBattLevelInt < targetBatteryLevel) {
-                        needLimit = false
+                if chargeState != nil && currentBattLevelInt >= 0 {
+                    if isACPower == true {
+                        // If already in battery level limit, some margin (defaultBatteryLevelMargin) is required to release the battery level limit.
+                        if (!lastLimit && currentBattLevelInt < targetBatteryLevel) || (lastLimit && currentBattLevelInt < (targetBatteryLevel - defaultBatteryLevelMargin)) {
+                            needLimit = false
+                        }
                     }
                 }
-                if (lastLimit != needLimit) {
+                if lastLimit != needLimit {
                     print("Limit status will be changed. (Current: \(String(needLimit)), Last: \(String(lastLimit)))")
 
                     lastLimit = needLimit
@@ -209,55 +213,55 @@ struct BCLMLoop: ParsableCommand {
                     lastLimitCheckCount += 1
                 }
 
-                if (isACPower != nil && lastACPower != isACPower) {
+                if isACPower != nil && lastACPower != isACPower {
                     lastACPower = isACPower
                     lastCharging = nil
                 }
 
-                if (lastCharging != isCharging) {
+                if lastCharging != isCharging {
                     var isChargingStr = "nil"
-                    if (isCharging != nil) {
+                    if isCharging != nil {
                         isChargingStr = String(isCharging!)
                     }
                     var lastChargingStr = "nil"
-                    if (lastCharging != nil) {
+                    if lastCharging != nil {
                         lastChargingStr = String(lastCharging!)
                     }
                     print("Charging status has changed! (Current: \(isChargingStr), Last: \(lastChargingStr))")
                     
                     lastCharging = isCharging
                     lastChargingCheckCount = 1
-                } else if (isCharging != nil) {
+                } else if isCharging != nil {
                     lastChargingCheckCount += 1
                 }
 
                 // If each function has been repeated maxTryCount times, skip check.
-                if (lastLimitCheckCount <= maxTryCount || lastChargingCheckCount <= maxTryCount) {
+                if lastLimitCheckCount <= maxTryCount || lastChargingCheckCount <= maxTryCount {
                     do {
                         try SMCKit.open()
                         print("SMC has opened!")
                         
                         // Change charging status (If current charging status is known).
-                        if (needLimit == true)  {
+                        if needLimit == true  {
                             try AllowCharging(status: false)
                             //try ForceDischarging(status: true)
                             print("Limit status has changed! (Limit)")
                             
                             // A: The battery is "full", sleep will no longer be prevented (If currently prevented).
                             // B: No charger connected, sleep will no longer be prevented (If currently prevented), but charging is limited by default to prevent charging to 100% when disconnected from charger and sleeping.
-                            if (pmStatus != nil && IOPMAssertionRelease(assertionID) == kIOReturnSuccess) {
+                            if pmStatus != nil && IOPMAssertionRelease(assertionID) == kIOReturnSuccess {
                                 pmStatus = nil
                                 assertionID = IOPMAssertionID(0)
                             }
-                        } else if (needLimit == false) {
+                        } else if needLimit == false {
                             try AllowCharging(status: true)
                             //try ForceDischarging(status: false)
                             print("Limit status has changed! (Unlimit)")
                             
                             // The battery is not "full", sleep will be prevented (If not currently prevented).
-                            if (pmStatus == nil) {
+                            if pmStatus == nil {
                                 pmStatus = IOPMAssertionCreateWithName(kIOPMAssertionTypePreventSystemSleep as CFString, UInt32(kIOPMAssertionLevelOn), reasonForActivity as CFString, &assertionID)
-                                if (pmStatus != kIOReturnSuccess) {
+                                if pmStatus != kIOReturnSuccess {
                                     pmStatus = nil
                                     assertionID = IOPMAssertionID(0)
                                     print("Failed to prevent sleep.")
@@ -266,10 +270,10 @@ struct BCLMLoop: ParsableCommand {
                         }
                         
                         // Change MagSafe LED status.
-                        if (isCharging == false) {
+                        if isCharging == false {
                             try ChangeMagSafeLED(color: "Green")
                             print("MagSafe LED status has changed! (Full)")
-                        } else if (isCharging == true) {
+                        } else if isCharging == true {
                             try ChangeMagSafeLED(color: "Red")
                             print("MagSafe LED status has changed! (Charging)")
                         } else {
