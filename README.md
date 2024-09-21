@@ -6,9 +6,18 @@ The purpose of limiting the battery's max charge is to prolong battery health an
 
 To use it, Apple Optimized Battery Charging must be turned off. It will first try to use firmware based battery level limits on supported firmware.
 
+It only supports Apple Silicon based Mac computers.
+
 This project was forked from upstream (https://github.com/zackelia/bclm).
 
 ## Installation
+
+### Brew
+
+```
+$ brew tap lslqtz/formulae
+$ brew install bclm_loop
+```
 
 ### From Source
 
