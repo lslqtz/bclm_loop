@@ -7,6 +7,8 @@ var defaultTargetBatteryLevel = 80
 var defaultBatteryLevelMargin = 5
 var targetBatteryLevelRange = [5, 95]
 var targetBatteryMarginRange = [2, 30]
+var chargeNowFilePath = "/tmp/bclm_loop.chargeNow"
+var chargeNowFileCreationTimeMaxInterval: Int64 = 12
 var isFirmwareSupported = false
 var chargeNow = false
 
@@ -115,6 +117,42 @@ func CheckTargetBatteryMargin(targetBatteryLevel: Int, targetBatteryMargin: Int)
     }
 }
 
+func GetCurrentTimestamp() -> Int64 {
+    return Int64(ceil(Date().timeIntervalSince1970))
+}
+
+func CheckChargeNowFile() -> Bool {
+    do {
+        let chargeNowFileContent = try String(contentsOfFile: chargeNowFilePath, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines)
+        try FileManager.default.removeItem(atPath: chargeNowFilePath)
+
+        let chargeNowFileCreationTimestamp = Int64(chargeNowFileContent)
+        let currentTimestamp = GetCurrentTimestamp()
+        if chargeNowFileCreationTimestamp != nil && (chargeNowFileCreationTimestamp! + chargeNowFileCreationTimeMaxInterval) >= currentTimestamp {
+            return true
+        }
+        
+        print("Bad chargeNow file content. (chargeNowFileContent: \(chargeNowFileContent), chargeNowFileCreationTimestamp: \(chargeNowFileCreationTimestamp != nil ? String(chargeNowFileCreationTimestamp!) : "nil"), currentTimestamp: \(String(currentTimestamp)))")
+    } catch {
+        let realError = error as NSError
+        if realError.code != NSFileReadNoSuchFileError {
+            print(realError.localizedDescription)
+        }
+    }
+
+    return false
+}
+
+func SetChargeNowFile(status: Bool) -> Bool {
+    try? FileManager.default.removeItem(atPath: chargeNowFilePath)
+
+    if !status || FileManager.default.createFile(atPath: chargeNowFilePath, contents: String(GetCurrentTimestamp()).data(using: .utf8)) {
+        return true
+    }
+    
+    return false
+}
+
 func AllowChargeNow(status: Bool) -> Bool {
     if !chargeNow && status {
         chargeNow = true
@@ -132,11 +170,11 @@ struct BCLMLoop: ParsableCommand {
             commandName: "bclm_loop",
             abstract: "Battery Charge Level Max Loop (BCLM_Loop) Utility.",
             version: "1.0",
-            subcommands: [Loop.self, Persist.self, Unpersist.self])
+            subcommands: [Loop.self, ChargeNow.self, Persist.self, Unpersist.self])
 
     struct Loop: ParsableCommand {
         static let configuration = CommandConfiguration(
-            abstract: "Loop bclm on target battery level (Default: \(defaultTargetBatteryLevel)%).")
+            abstract: "Loop bclm on target battery level. (Default: \(defaultTargetBatteryLevel)%)")
         
         @Argument(help: "The value to set (\(targetBatteryLevelRange[0])-\(targetBatteryLevelRange[1])). Firmware-based battery level limits are not supported if not set to \(defaultTargetBatteryLevel).")
         var targetBatteryLevel: Int = defaultTargetBatteryLevel
@@ -211,21 +249,13 @@ struct BCLMLoop: ParsableCommand {
                 try SMCKit.writeData(aclc_key, data: aclc_bytes_unknown)
                 break
             }
-
-            print("MagSafe LED status has changed! (Full)")
         }
         
         func run() {
-            if CheckFirmwareSupport() {
-                isFirmwareSupported = true
-                print("Use firmware-based battery level limits.")
-            } else {
-                isFirmwareSupported = false
-                print("Use software-based battery level limits.")
-            }
+            print("bclm_loop has started...")
 
             var pmStatus : IOReturn? = nil
-            var assertionID : IOPMAssertionID = IOPMAssertionID(0)
+            var assertionID = IOPMAssertionID(0)
             let reasonForActivity = "bclm_loop - Prevent sleep before charging limit is reached."
             let maxTryCount = 3
             var lastLimit = false
@@ -234,12 +264,18 @@ struct BCLMLoop: ParsableCommand {
             var lastCharging : Bool? = nil
             var lastChargingCheckCount = 0
             
+            if CheckFirmwareSupport() {
+                isFirmwareSupported = true
+                print("Use firmware-based battery level limits.")
+            } else {
+                isFirmwareSupported = false
+                print("Use software-based battery level limits.")
+            }
+            
             signal(SIGUSR1) { _ in
                 _ = AllowChargeNow(status: true)
                 print("Received SIGUSR1 signal, enabled chargeNow.")
             }
-            
-            print("bclm_loop has started...")
 
             while true {
                 let snapshot = IOPSCopyPowerSourcesInfo().takeRetainedValue()
@@ -249,12 +285,16 @@ struct BCLMLoop: ParsableCommand {
                 let isCharging = sources[0]["Is Charging"] as? Bool
                 let currentBattLevelInt = Int((sources[0]["Current Capacity"] as? Int) ?? -1)
                 //let maxBattLevelInt = Int((sources[0]["Max Capacity"] as? Int) ?? -1)
-                
+
                 // Avoid failure by repeating maxTryCount times, and avoid opening SMC each time to affect performance.
                 var needLimit = true
 
                 if chargeState != nil && currentBattLevelInt >= 0 {
                     if isACPower == true {
+                        if CheckChargeNowFile() {
+                            _ = AllowChargeNow(status: true)
+                            print("Detect chargeNow file, enabled chargeNow.")
+                        }
                         // If already in battery level limit, some margin (targetBatteryMargin) is required to release the battery level limit.
                         if chargeNow || (!lastLimit && currentBattLevelInt < targetBatteryLevel) || (lastLimit && currentBattLevelInt < (targetBatteryLevel - targetBatteryMargin)) {
                             needLimit = false
@@ -276,6 +316,10 @@ struct BCLMLoop: ParsableCommand {
                 if isACPower != nil && lastACPower != isACPower {
                     lastACPower = isACPower
                     lastCharging = nil
+                    if isACPower == false {
+                        chargeNow = false
+                        print("AC power is disconnected, disabled chargeNow.")
+                    }
                 }
 
                 if lastCharging != isCharging {
@@ -349,6 +393,22 @@ struct BCLMLoop: ParsableCommand {
                 }
 
                 sleep(2)
+            }
+        }
+    }
+
+    struct ChargeNow: ParsableCommand {
+        static let configuration = CommandConfiguration(
+            commandName: "chargeNow",
+            abstract: "Send a command to bclm_loop to fully charge now. (Only available if bclm_loop is running and currently charging)")
+
+        func validate() throws {
+            try CheckPlatform()
+        }
+
+        func run() {
+            if SetChargeNowFile(status: true) {
+                print("The command has been sent. If bclm_loop is running and currently charging, it should respond quickly.")
             }
         }
     }
