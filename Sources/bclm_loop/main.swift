@@ -4,8 +4,9 @@ import IOKit.ps
 import IOKit.pwr_mgt
 
 var defaultTargetBatteryLevel = 80
-var defaultBatteryLevelMargin = 2
+var defaultBatteryLevelMargin = 5
 var targetBatteryLevelRange = [5, 95]
+var targetBatteryMarginRange = [2, 30]
 var chwaExist = false
 
 var chwa_key = SMCKit.getKey("CHWA", type: DataTypes.UInt8)
@@ -78,6 +79,34 @@ var aclc_bytes_unknown: SMCBytes = (
     UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0)
 )
 
+func CheckPermission() throws {
+    guard getuid() == 0 else {
+        throw ValidationError("Must run as root.")
+    }
+}
+
+func CheckPlatform() throws {
+    #if arch(x86_64)
+        throw ValidationError("Only support Apple Silicon.")
+    #endif
+}
+
+func CheckTargetBatteryLevel(targetBatteryLevel: Int) throws {
+    guard targetBatteryLevel >= targetBatteryLevelRange[0] && targetBatteryLevel <= targetBatteryLevelRange[1] else {
+        throw ValidationError("Value must be between \(targetBatteryLevelRange[0]) and \(targetBatteryLevelRange[1]).")
+    }
+}
+
+func CheckTargetBatteryMargin(targetBatteryLevel: Int, targetBatteryMargin: Int) throws {
+    guard targetBatteryMargin >= targetBatteryMarginRange[0] && targetBatteryMargin <= targetBatteryMarginRange[1] else {
+        throw ValidationError("Value must be between \(targetBatteryMarginRange[0]) and \(targetBatteryMarginRange[1]).")
+    }
+
+    guard (targetBatteryLevel - targetBatteryMargin) >= targetBatteryLevelRange[0] else {
+        throw ValidationError("The value (\(targetBatteryLevel)-\(targetBatteryMargin)) must be greater than or equal to \(targetBatteryLevelRange[0]).")
+    }
+}
+
 struct BCLMLoop: ParsableCommand {
     static let configuration = CommandConfiguration(
             commandName: "bclm_loop",
@@ -89,31 +118,28 @@ struct BCLMLoop: ParsableCommand {
         static let configuration = CommandConfiguration(
             abstract: "Loop bclm on target battery level (Default: \(defaultTargetBatteryLevel)%).")
         
-        @Argument(help: "The value to set (\(targetBatteryLevelRange[0])-\(targetBatteryLevelRange[1])). Firmware-based battery level limits are not supported if not set to 80.")
+        @Argument(help: "The value to set (\(targetBatteryLevelRange[0])-\(targetBatteryLevelRange[1])). Firmware-based battery level limits are not supported if not set to \(defaultTargetBatteryLevel).")
         var targetBatteryLevel: Int = defaultTargetBatteryLevel
 
-        func validate() throws {
-            guard getuid() == 0 else {
-                throw ValidationError("Must run as root.")
-            }
+        @Argument(help: "The value to set (\(targetBatteryMarginRange[0])-\(targetBatteryMarginRange[1])). Firmware-based battery level limits are not supported if not set to \(defaultBatteryLevelMargin).")
+        var targetBatteryMargin: Int = defaultBatteryLevelMargin
 
-#if arch(x86_64)
-            throw ValidationError("Only support Apple Silicon.")
-#endif
-            
-            guard targetBatteryLevel >= targetBatteryLevelRange[0] && targetBatteryLevel <= targetBatteryLevelRange[1] else {
-                throw ValidationError("Value must be between \(targetBatteryLevelRange[0]) and \(targetBatteryLevelRange[1]).")
-            }
+        func validate() throws {
+            try CheckPermission()
+            try CheckPlatform()
+            try CheckTargetBatteryLevel(targetBatteryLevel: targetBatteryLevel)
+            try CheckTargetBatteryMargin(targetBatteryLevel: targetBatteryLevel, targetBatteryMargin: targetBatteryMargin)
         }
 
-        func CheckCHWAExist() -> Bool {
-            if targetBatteryLevel != defaultTargetBatteryLevel {
+        func CheckFirmwareSupport() -> Bool {
+            if targetBatteryLevel != defaultTargetBatteryLevel || targetBatteryMargin != defaultBatteryLevelMargin {
                 return false
             }
 
             do {
                 _ = try SMCKit.readData(chwa_key)
             } catch {
+                print("SMCKey \"CHWA\" not found.")
                 return false
             }
 
@@ -166,12 +192,12 @@ struct BCLMLoop: ParsableCommand {
         }
         
         func run() {
-            if CheckCHWAExist() {
+            if CheckFirmwareSupport() {
                 chwaExist = true
-                print("Use firmware-based battery level limits. (SMCKey \"CHWA\" found)")
+                print("Use firmware-based battery level limits.")
             } else {
                 chwaExist = false
-                print("Use software-based battery level limits. (SMCKey \"CHWA\" not found)")
+                print("Use software-based battery level limits.")
             }
 
             var pmStatus : IOReturn? = nil
@@ -296,25 +322,21 @@ struct BCLMLoop: ParsableCommand {
         static let configuration = CommandConfiguration(
             abstract: "Persists bclm loop service.")
         
-        @Argument(help: "The value to set (\(targetBatteryLevelRange[0])-\(targetBatteryLevelRange[1])). Firmware-based battery level limits are not supported if not set to 80.")
+        @Argument(help: "The value to set (\(targetBatteryLevelRange[0])-\(targetBatteryLevelRange[1])). Firmware-based battery level limits are not supported if not set to \(defaultTargetBatteryLevel).")
         var targetBatteryLevel: Int = defaultTargetBatteryLevel
     
-        func validate() throws {
-            guard getuid() == 0 else {
-                throw ValidationError("Must run as root.")
-            }
+        @Argument(help: "The value to set (\(targetBatteryMarginRange[0])-\(targetBatteryMarginRange[1])). Firmware-based battery level limits are not supported if not set to \(defaultBatteryLevelMargin).")
+        var targetBatteryMargin: Int = defaultBatteryLevelMargin
 
-#if arch(x86_64)
-            throw ValidationError("Only support Apple Silicon.")
-#endif
-            
-            guard targetBatteryLevel >= targetBatteryLevelRange[0] && targetBatteryLevel <= targetBatteryLevelRange[1] else {
-                throw ValidationError("Value must be between \(targetBatteryLevelRange[0]) and \(targetBatteryLevelRange[1]).")
-            }
+        func validate() throws {
+            try CheckPermission()
+            try CheckPlatform()
+            try CheckTargetBatteryLevel(targetBatteryLevel: targetBatteryLevel)
+            try CheckTargetBatteryMargin(targetBatteryLevel: targetBatteryLevel, targetBatteryMargin: targetBatteryMargin)
         }
 
         func run() {
-            updatePlist(targetBatteryLevel: targetBatteryLevel)
+            updatePlist(targetBatteryLevel: targetBatteryLevel, targetBatteryMargin: targetBatteryMargin)
             persist(true)
         }
     }
@@ -324,13 +346,8 @@ struct BCLMLoop: ParsableCommand {
             abstract: "Unpersists bclm loop service.")
 
         func validate() throws {
-            guard getuid() == 0 else {
-                throw ValidationError("Must run as root.")
-            }
-
-#if arch(x86_64)
-            throw ValidationError("Only support Apple Silicon.")
-#endif
+            try CheckPermission()
+            try CheckPlatform()
         }
 
         func run() {

@@ -67,7 +67,7 @@ func isPersistent() -> Bool {
     }
 }
 
-func updatePlist(targetBatteryLevel: Int) {
+func updatePlist(targetBatteryLevel: Int, targetBatteryMargin: Int) {
     let preferences =
             Preferences(
                 Label: plist,
@@ -77,6 +77,7 @@ func updatePlist(targetBatteryLevel: Int) {
                     Bundle.main.executablePath! as String,
                     "loop",
                     String(targetBatteryLevel),
+                    String(targetBatteryMargin),
                 ]
             )
 
