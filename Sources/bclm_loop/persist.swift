@@ -11,14 +11,12 @@ struct Preferences: Codable {
     var ProgramArguments: [String]
 }
 
-func persist(_ enable: Bool) {
+func persist(_ enable: Bool) -> Bool {
     if isPersistent() && enable {
-        fputs("Already persisting!\n", stderr)
-        return
+        return false
     }
     if !isPersistent() && !enable {
-        fputs("Already not persisting!\n", stderr)
-        return
+        return false
     }
 
     let process = Process()
@@ -44,6 +42,8 @@ func persist(_ enable: Bool) {
     if output != nil && !output!.isEmpty {
         print(output!)
     }
+    
+    return true
 }
 
 func isPersistent() -> Bool {
