@@ -67,7 +67,7 @@ func isPersistent() -> Bool {
     }
 }
 
-func updatePlist(targetBatteryLevel: Int, targetBatteryMargin: Int) {
+func updatePlist(targetBatteryLevel: Int, targetBatteryMargin: Int) -> Bool {
     let preferences =
             Preferences(
                 Label: plist,
@@ -89,15 +89,21 @@ func updatePlist(targetBatteryLevel: Int, targetBatteryMargin: Int) {
     do {
         let data = try encoder.encode(preferences)
         try data.write(to: path)
+        return true
     } catch {
         print(error)
     }
+    
+    return false
 }
 
-func removePlist() {
+func removePlist() -> Bool {
     do {
         try FileManager.default.removeItem(at: URL(fileURLWithPath: plist_path))
+        return true
     } catch {
         print(error)
     }
+    
+    return false
 }

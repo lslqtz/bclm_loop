@@ -433,9 +433,12 @@ struct BCLMLoop: ParsableCommand {
         func run() {
             if persist(false) {
                 print("Already persisting! Re-persist...\n")
+                _ = removePlist()
             }
-            updatePlist(targetBatteryLevel: targetBatteryLevel, targetBatteryMargin: targetBatteryMargin)
-            _ = persist(true)
+
+            if updatePlist(targetBatteryLevel: targetBatteryLevel, targetBatteryMargin: targetBatteryMargin) && persist(true) {
+                print("Success!")
+            }
         }
     }
 
@@ -452,7 +455,10 @@ struct BCLMLoop: ParsableCommand {
             if !persist(false) {
                 fputs("Already not persisting!\n", stderr)
             }
-            removePlist()
+
+            if removePlist() {
+                print("Success!")
+            }
         }
     }
 }
