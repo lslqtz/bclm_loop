@@ -7,7 +7,8 @@ var defaultTargetBatteryLevel = 80
 var defaultBatteryLevelMargin = 5
 var targetBatteryLevelRange = [5, 95]
 var targetBatteryMarginRange = [2, 30]
-var chwaExist = false
+var isFirmwareSupported = false
+var chargeNow = false
 
 var chwa_key = SMCKit.getKey("CHWA", type: DataTypes.UInt8)
 var ch0b_key = SMCKit.getKey("CH0B", type: DataTypes.UInt8)
@@ -71,6 +72,13 @@ var aclc_bytes_red: SMCBytes = (
     UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0),
     UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0)
 )
+var aclc_bytes_disable: SMCBytes = (
+    UInt8(1), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0),
+    UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0),
+    UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0),
+    UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0),
+    UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0)
+)
 var aclc_bytes_unknown: SMCBytes = (
     UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0),
     UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0),
@@ -107,10 +115,22 @@ func CheckTargetBatteryMargin(targetBatteryLevel: Int, targetBatteryMargin: Int)
     }
 }
 
+func AllowChargeNow(status: Bool) -> Bool {
+    if !chargeNow && status {
+        chargeNow = true
+    } else if chargeNow && !status {
+        chargeNow = false
+    } else {
+        return false
+    }
+    
+    return true
+}
+
 struct BCLMLoop: ParsableCommand {
     static let configuration = CommandConfiguration(
             commandName: "bclm_loop",
-            abstract: "Battery Charge Level Max (BCLM) Utility.",
+            abstract: "Battery Charge Level Max Loop (BCLM_Loop) Utility.",
             version: "1.0",
             subcommands: [Loop.self, Persist.self, Unpersist.self])
 
@@ -139,7 +159,6 @@ struct BCLMLoop: ParsableCommand {
             do {
                 _ = try SMCKit.readData(chwa_key)
             } catch {
-                print("SMCKey \"CHWA\" not found.")
                 return false
             }
 
@@ -147,7 +166,7 @@ struct BCLMLoop: ParsableCommand {
         }
 
         func AllowCharging(status: Bool) throws {
-            if chwaExist {
+            if isFirmwareSupported {
                 if status {
                     try SMCKit.writeData(chwa_key, data: chwa_bytes_unlimit)
                 } else {
@@ -165,7 +184,7 @@ struct BCLMLoop: ParsableCommand {
         }
 
         func ForceDischarging(status: Bool) throws {
-            if chwaExist {
+            if isFirmwareSupported {
                 return
             }
 
@@ -184,19 +203,24 @@ struct BCLMLoop: ParsableCommand {
             case "Red":
                 try SMCKit.writeData(aclc_key, data: aclc_bytes_red)
                 break
+            case "Disable":
+                try SMCKit.writeData(aclc_key, data: aclc_bytes_disable)
+                break
             case "Unknown": fallthrough
             default:
                 try SMCKit.writeData(aclc_key, data: aclc_bytes_unknown)
                 break
             }
+
+            print("MagSafe LED status has changed! (Full)")
         }
         
         func run() {
             if CheckFirmwareSupport() {
-                chwaExist = true
+                isFirmwareSupported = true
                 print("Use firmware-based battery level limits.")
             } else {
-                chwaExist = false
+                isFirmwareSupported = false
                 print("Use software-based battery level limits.")
             }
 
@@ -209,6 +233,13 @@ struct BCLMLoop: ParsableCommand {
             var lastACPower : Bool? = nil
             var lastCharging : Bool? = nil
             var lastChargingCheckCount = 0
+            
+            signal(SIGUSR1) { _ in
+                _ = AllowChargeNow(status: true)
+                print("Received SIGUSR1 signal, enabled chargeNow.")
+            }
+            
+            print("bclm_loop has started...")
 
             while true {
                 let snapshot = IOPSCopyPowerSourcesInfo().takeRetainedValue()
@@ -224,10 +255,13 @@ struct BCLMLoop: ParsableCommand {
 
                 if chargeState != nil && currentBattLevelInt >= 0 {
                     if isACPower == true {
-                        // If already in battery level limit, some margin (defaultBatteryLevelMargin) is required to release the battery level limit.
-                        if (!lastLimit && currentBattLevelInt < targetBatteryLevel) || (lastLimit && currentBattLevelInt < (targetBatteryLevel - defaultBatteryLevelMargin)) {
+                        // If already in battery level limit, some margin (targetBatteryMargin) is required to release the battery level limit.
+                        if chargeNow || (!lastLimit && currentBattLevelInt < targetBatteryLevel) || (lastLimit && currentBattLevelInt < (targetBatteryLevel - targetBatteryMargin)) {
                             needLimit = false
                         }
+                    } else if chargeNow {
+                        chargeNow = false
+                        print("AC power is disconnected, disabled chargeNow.")
                     }
                 }
                 if lastLimit != needLimit {
@@ -304,6 +338,7 @@ struct BCLMLoop: ParsableCommand {
                             print("MagSafe LED status has changed! (Charging)")
                         } else {
                             try ChangeMagSafeLED(color: "Unknown")
+                            print("MagSafe LED status has changed! (Unknown)")
                         }
                         
                         SMCKit.close()
