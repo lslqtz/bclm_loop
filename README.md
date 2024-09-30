@@ -8,6 +8,8 @@ To use it, Apple Optimized Battery Charging must be turned off. It will first tr
 
 If the current battery level is higher than the target battery level, please manually discharge it to the target battery level or lower, otherwise it may only stay at the current battery level. This tool does not implement forced discharge because it may make the system unable to recognize the power adapter status.
 
+When the battery is no longer charging (for any reason, including but not limited to reaching the target battery level or insufficient power from the power adapter), MagSafe LED will turn green, which may be inconsistent with system behavior (which only turn green when fully charged).
+
 It only supports Apple Silicon based Mac computers.
 
 This project was forked from upstream (https://github.com/zackelia/bclm).
@@ -34,6 +36,7 @@ $ sudo make install
 $ unzip bclm_loop.zip
 $ sudo mkdir -p /usr/local/bin
 $ sudo cp bclm_loop /usr/local/bin/bclm_loop
+$ sudo xattr -c /usr/local/bin/bclm_loop
 $ sudo chmod +x /usr/local/bin/bclm_loop
 ```
 
