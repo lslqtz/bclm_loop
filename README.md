@@ -73,13 +73,13 @@ $ sudo rm -f /Library/LaunchDaemon/com.zackelia.bclm_loop.plist
 
 ## Persistence
 
-It can run in the background to maintain battery levels. Just create a new plist in `/Library/LaunchDaemons` and load it via `launchctl`. 
+It can run in the background to maintain battery levels. This command will create a new plist in `/Library/LaunchDaemons` and load it via `launchctl`. 
 
 ```
 $ sudo bclm_loop persist
 ```
 
-Likewise, it can be unpersisted which will unload the service and remove the plist.
+Likewise, this command can also unpersist by unloading the service and removing the plist.
 
 ```
 $ sudo bclm_loop unpersist
