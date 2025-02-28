@@ -300,7 +300,7 @@ struct BCLMLoop: ParsableCommand {
                             needLimit = false
                         }
                     } else if chargeNow {
-                        chargeNow = false
+                        _ = AllowChargeNow(status: false)
                         print("AC power is disconnected, disabled chargeNow.")
                     }
                 }
@@ -316,10 +316,6 @@ struct BCLMLoop: ParsableCommand {
                 if isACPower != nil && lastACPower != isACPower {
                     lastACPower = isACPower
                     lastCharging = nil
-                    if isACPower == false {
-                        chargeNow = false
-                        print("AC power is disconnected, disabled chargeNow.")
-                    }
                 }
 
                 if lastCharging != isCharging {
