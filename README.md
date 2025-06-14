@@ -10,7 +10,7 @@ If the current battery level is higher than the target battery level, please man
 
 When the battery is no longer charging (for any reason, including but not limited to reaching the target battery level or insufficient power from the power adapter), MagSafe LED will turn green, which may be inconsistent with system behavior (which only turn green when fully charged).
 
-It only supports Apple Silicon based Mac computers.
+It only supports Apple Silicon based Mac computers. macOS 26 and above may not be supported!
 
 This project was forked from upstream (https://github.com/zackelia/bclm).
 
