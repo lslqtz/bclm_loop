@@ -16,7 +16,7 @@ jobs:
     - name: Build
       run: make build
 
-    - uses: actions/upload-artifact@v3
+    - uses: actions/upload-artifact@v4
       with:
         name: bclm_loop
-        path: .build/apple/Products/Release/bclm_loop
+        path: .build/release/bclm_loop
