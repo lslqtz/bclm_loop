@@ -12,10 +12,12 @@ var chargeNowFileCreationTimeMaxInterval: Int64 = 12
 var isFirmwareSupported = false
 var chargeNow = false
 
-var chwa_key = SMCKit.getKey("CHWA", type: DataTypes.UInt8)
+var chwa_key = SMCKit.getKey("CHWA", type: DataTypes.UInt8) // Removed in macOS Sequoia.
 var ch0b_key = SMCKit.getKey("CH0B", type: DataTypes.UInt8)
 var ch0c_key = SMCKit.getKey("CH0C", type: DataTypes.UInt8)
 var ch0i_key = SMCKit.getKey("CH0I", type: DataTypes.UInt8)
+var chte_key = SMCKit.getKey("CHTE", type: DataTypes.UInt8) // Added in macOS Tahoe.
+var ch0j_key = SMCKit.getKey("CH0J", type: DataTypes.UInt8) // Added in macOS Tahoe.
 var aclc_key = SMCKit.getKey("ACLC", type: DataTypes.UInt8)
 
 var chwa_bytes_unlimit: SMCBytes = (
@@ -26,6 +28,20 @@ var chwa_bytes_unlimit: SMCBytes = (
     UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0)
 )
 var chwa_bytes_limit: SMCBytes = (
+    UInt8(1), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0),
+    UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0),
+    UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0),
+    UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0),
+    UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0)
+)
+var chte_bytes_unlimit: SMCBytes = (
+    UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0),
+    UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0),
+    UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0),
+    UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0),
+    UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0)
+)
+var chte_bytes_limit: SMCBytes = (
     UInt8(1), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0),
     UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0),
     UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0),
@@ -54,6 +70,20 @@ var ch0i_bytes_charge: SMCBytes = (
     UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0)
 )
 var ch0i_bytes_discharge: SMCBytes = (
+    UInt8(1), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0),
+    UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0),
+    UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0),
+    UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0),
+    UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0)
+)
+var ch0j_bytes_charge: SMCBytes = (
+    UInt8(1), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0),
+    UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0),
+    UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0),
+    UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0),
+    UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0)
+)
+var ch0j_bytes_discharge: SMCBytes = (
     UInt8(1), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0),
     UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0),
     UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0),
@@ -194,6 +224,10 @@ struct BCLMLoop: ParsableCommand {
                 return false
             }
 
+            if #available(macOS 15, *) {
+                return false
+            }
+
             do {
                 _ = try SMCKit.readData(chwa_key)
             } catch {
@@ -211,12 +245,20 @@ struct BCLMLoop: ParsableCommand {
                     try SMCKit.writeData(chwa_key, data: chwa_bytes_limit)
                 }
             } else {
-                if status {
-                    try SMCKit.writeData(ch0b_key, data: ch0x_bytes_unlimit)
-                    try SMCKit.writeData(ch0c_key, data: ch0x_bytes_unlimit)
+                if #available(macOS 16, *) {
+                    if status {
+                        try SMCKit.writeData(chte_key, data: chte_bytes_unlimit)
+                    } else {
+                        try SMCKit.writeData(chte_key, data: chte_bytes_limit)
+                    }
                 } else {
-                    try SMCKit.writeData(ch0b_key, data: ch0x_bytes_limit)
-                    try SMCKit.writeData(ch0c_key, data: ch0x_bytes_limit)
+                    if status {
+                        try SMCKit.writeData(ch0b_key, data: ch0x_bytes_unlimit)
+                        try SMCKit.writeData(ch0c_key, data: ch0x_bytes_unlimit)
+                    } else {
+                        try SMCKit.writeData(ch0b_key, data: ch0x_bytes_limit)
+                        try SMCKit.writeData(ch0c_key, data: ch0x_bytes_limit)
+                    }
                 }
             }
         }
@@ -225,11 +267,19 @@ struct BCLMLoop: ParsableCommand {
             if isFirmwareSupported {
                 return
             }
-
-            if status {
-                try SMCKit.writeData(ch0i_key, data: ch0i_bytes_discharge)
+            
+            if #available(macOS 16, *) {
+                if status {
+                    try SMCKit.writeData(ch0j_key, data: ch0j_bytes_discharge)
+                } else {
+                    try SMCKit.writeData(ch0j_key, data: ch0j_bytes_charge)
+                }
             } else {
-                try SMCKit.writeData(ch0i_key, data: ch0i_bytes_charge)
+                if status {
+                    try SMCKit.writeData(ch0i_key, data: ch0i_bytes_discharge)
+                } else {
+                    try SMCKit.writeData(ch0i_key, data: ch0i_bytes_charge)
+                }
             }
         }
         
