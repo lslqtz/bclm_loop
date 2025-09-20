@@ -199,7 +199,7 @@ struct BCLMLoop: ParsableCommand {
     static let configuration = CommandConfiguration(
             commandName: "bclm_loop",
             abstract: "Battery Charge Level Max Loop (BCLM_Loop) Utility.",
-            version: "1.0b5",
+            version: "1.0b6",
             subcommands: [Loop.self, ChargeNow.self, Persist.self, Unpersist.self])
 
     struct Loop: ParsableCommand {
