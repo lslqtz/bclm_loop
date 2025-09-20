@@ -42,8 +42,8 @@ var chte_bytes_unlimit: SMCBytes = (
     UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0)
 )
 var chte_bytes_limit: SMCBytes = (
-    UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0),
-    UInt8(1), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0),
+    UInt8(1), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0),
+    UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0),
     UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0),
     UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0),
     UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0)
