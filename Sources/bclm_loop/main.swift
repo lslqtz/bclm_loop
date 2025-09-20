@@ -16,7 +16,7 @@ var chwa_key = SMCKit.getKey("CHWA", type: DataTypes.UInt8) // Removed in macOS 
 var ch0b_key = SMCKit.getKey("CH0B", type: DataTypes.UInt8)
 var ch0c_key = SMCKit.getKey("CH0C", type: DataTypes.UInt8)
 var ch0i_key = SMCKit.getKey("CH0I", type: DataTypes.UInt8)
-var chte_key = SMCKit.getKey("CHTE", type: DataTypes.UInt8) // Added in macOS Tahoe.
+var chte_key = SMCKit.getKey("CHTE", type: DataTypes.UInt32) // Added in macOS Tahoe.
 var ch0j_key = SMCKit.getKey("CH0J", type: DataTypes.UInt8) // Added in macOS Tahoe.
 var aclc_key = SMCKit.getKey("ACLC", type: DataTypes.UInt8)
 
@@ -42,8 +42,8 @@ var chte_bytes_unlimit: SMCBytes = (
     UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0)
 )
 var chte_bytes_limit: SMCBytes = (
-    UInt8(1), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0),
-    UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0),
+    UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0),
+    UInt8(1), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0),
     UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0),
     UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0),
     UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0)
@@ -245,7 +245,7 @@ struct BCLMLoop: ParsableCommand {
                     try SMCKit.writeData(chwa_key, data: chwa_bytes_limit)
                 }
             } else {
-                if #available(macOS 16, *) {
+                if #available(macOS 15.7, *) {
                     if status {
                         try SMCKit.writeData(chte_key, data: chte_bytes_unlimit)
                     } else {
@@ -268,7 +268,7 @@ struct BCLMLoop: ParsableCommand {
                 return
             }
             
-            if #available(macOS 16, *) {
+            if #available(macOS 15.7, *) {
                 if status {
                     try SMCKit.writeData(ch0j_key, data: ch0j_bytes_discharge)
                 } else {
