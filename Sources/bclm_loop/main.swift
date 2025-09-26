@@ -237,6 +237,16 @@ struct BCLMLoop: ParsableCommand {
             return true
         }
 
+        func CheckMagSafeSupport() -> Bool {
+            do {
+                _ = try SMCKit.readData(aclc_key)
+            } catch {
+                return false
+            }
+
+            return true
+        }
+
         func AllowCharging(status: Bool) throws {
             if isFirmwareSupported {
                 if status {
@@ -284,6 +294,10 @@ struct BCLMLoop: ParsableCommand {
         }
         
         func ChangeMagSafeLED(color: String) throws {
+            if !isMagSafeSupported {
+                return
+            }
+            
             switch color {
             case "Green":
                 try SMCKit.writeData(aclc_key, data: aclc_bytes_green)
@@ -320,6 +334,14 @@ struct BCLMLoop: ParsableCommand {
             } else {
                 isFirmwareSupported = false
                 print("Use software-based battery level limits.")
+            }
+            
+            if CheckMagSafeSupport() {
+                isMagSafeSupported = true
+                print("Enabled MagSafe control.")
+            } else {
+                isMagSafeSupported = false
+                print("Disabled MagSafe control.")
             }
             
             signal(SIGUSR1) { _ in
@@ -420,15 +442,17 @@ struct BCLMLoop: ParsableCommand {
                         }
                         
                         // Change MagSafe LED status.
-                        if isCharging == false {
-                            try ChangeMagSafeLED(color: "Green")
-                            print("MagSafe LED status has changed! (Full)")
-                        } else if isCharging == true {
-                            try ChangeMagSafeLED(color: "Red")
-                            print("MagSafe LED status has changed! (Charging)")
-                        } else {
-                            try ChangeMagSafeLED(color: "Unknown")
-                            print("MagSafe LED status has changed! (Unknown)")
+                        if isMagSafeSupported {
+                            if isCharging == false {
+                                try ChangeMagSafeLED(color: "Green")
+                                print("MagSafe LED status has changed! (Full)")
+                            } else if isCharging == true {
+                                try ChangeMagSafeLED(color: "Red")
+                                print("MagSafe LED status has changed! (Charging)")
+                            } else {
+                                try ChangeMagSafeLED(color: "Unknown")
+                                print("MagSafe LED status has changed! (Unknown)")
+                            }
                         }
                         
                         SMCKit.close()
