@@ -10,6 +10,7 @@ var targetBatteryMarginRange = [2, 30]
 var chargeNowFilePath = "/tmp/bclm_loop.chargeNow"
 var chargeNowFileCreationTimeMaxInterval: Int64 = 12
 var isFirmwareSupported = false
+var isMagSafeSupported = false
 var chargeNow = false
 
 var chwa_key = SMCKit.getKey("CHWA", type: DataTypes.UInt8) // Removed in macOS Sequoia.
