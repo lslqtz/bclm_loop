@@ -9,9 +9,10 @@ var targetBatteryLevelRange = [5, 95]
 var targetBatteryMarginRange = [2, 30]
 var chargeNowFilePath = "/tmp/bclm_loop.chargeNow"
 var chargeNowFileCreationTimeMaxInterval: Int64 = 12
-var isFirmwareSupported = false
-var isMagSafeSupported = false
 var chargeNow = false
+
+var operateMode = 0
+var isMagSafeSupported = false
 
 var chwa_key = SMCKit.getKey("CHWA", type: DataTypes.UInt8) // Removed in macOS Sequoia.
 var ch0b_key = SMCKit.getKey("CH0B", type: DataTypes.UInt8)
@@ -225,7 +226,7 @@ struct BCLMLoop: ParsableCommand {
                 return false
             }
 
-            if #available(macOS 15, *) {
+            if #available(macOS 14.8.1, *) {
                 return false
             }
 
@@ -236,6 +237,27 @@ struct BCLMLoop: ParsableCommand {
             }
 
             return true
+        }
+
+        func GetSoftwareOperateMode() -> Int {
+            if #available(macOS 15.7, *) {
+                return 1
+            }
+
+            if #available(macOS 14.8.1, *) {
+                if #unavailable(macOS 15.0) {
+                    return 1
+                }
+            }
+
+            do {
+                _ = try SMCKit.readData(ch0b_key)
+                _ = try SMCKit.readData(ch0c_key)
+            } catch {
+                return 1
+            }
+
+            return 0
         }
 
         func CheckMagSafeSupport() -> Bool {
@@ -249,48 +271,51 @@ struct BCLMLoop: ParsableCommand {
         }
 
         func AllowCharging(status: Bool) throws {
-            if isFirmwareSupported {
+            if operateMode == 10 {
                 if status {
                     try SMCKit.writeData(chwa_key, data: chwa_bytes_unlimit)
                 } else {
                     try SMCKit.writeData(chwa_key, data: chwa_bytes_limit)
                 }
-            } else {
-                if #available(macOS 15.7, *) {
-                    if status {
-                        try SMCKit.writeData(chte_key, data: chte_bytes_unlimit)
-                    } else {
-                        try SMCKit.writeData(chte_key, data: chte_bytes_limit)
-                    }
+                return
+            }
+
+            if operateMode == 1 {
+                if status {
+                    try SMCKit.writeData(chte_key, data: chte_bytes_unlimit)
                 } else {
-                    if status {
-                        try SMCKit.writeData(ch0b_key, data: ch0x_bytes_unlimit)
-                        try SMCKit.writeData(ch0c_key, data: ch0x_bytes_unlimit)
-                    } else {
-                        try SMCKit.writeData(ch0b_key, data: ch0x_bytes_limit)
-                        try SMCKit.writeData(ch0c_key, data: ch0x_bytes_limit)
-                    }
+                    try SMCKit.writeData(chte_key, data: chte_bytes_limit)
                 }
+                return
+            }
+
+            if status {
+                try SMCKit.writeData(ch0b_key, data: ch0x_bytes_unlimit)
+                try SMCKit.writeData(ch0c_key, data: ch0x_bytes_unlimit)
+            } else {
+                try SMCKit.writeData(ch0b_key, data: ch0x_bytes_limit)
+                try SMCKit.writeData(ch0c_key, data: ch0x_bytes_limit)
             }
         }
 
         func ForceDischarging(status: Bool) throws {
-            if isFirmwareSupported {
+            if operateMode == 10 {
                 return
             }
             
-            if #available(macOS 15.7, *) {
+            if operateMode == 1 {
                 if status {
                     try SMCKit.writeData(ch0j_key, data: ch0j_bytes_discharge)
                 } else {
                     try SMCKit.writeData(ch0j_key, data: ch0j_bytes_charge)
                 }
+                return
+            }
+
+            if status {
+                try SMCKit.writeData(ch0i_key, data: ch0i_bytes_discharge)
             } else {
-                if status {
-                    try SMCKit.writeData(ch0i_key, data: ch0i_bytes_discharge)
-                } else {
-                    try SMCKit.writeData(ch0i_key, data: ch0i_bytes_charge)
-                }
+                try SMCKit.writeData(ch0i_key, data: ch0i_bytes_charge)
             }
         }
         
@@ -330,11 +355,11 @@ struct BCLMLoop: ParsableCommand {
             var lastChargingCheckCount = 0
             
             if CheckFirmwareSupport() {
-                isFirmwareSupported = true
-                print("Use firmware-based battery level limits.")
+                operateMode = 10
+                print("Use firmware-based battery level limits, operateMode: \(operateMode).")
             } else {
-                isFirmwareSupported = false
-                print("Use software-based battery level limits.")
+                operateMode = GetSoftwareOperateMode()
+                print("Use software-based battery level limits, operateMode: \(operateMode).")
             }
             
             if CheckMagSafeSupport() {
