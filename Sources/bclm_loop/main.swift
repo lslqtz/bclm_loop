@@ -354,22 +354,33 @@ struct BCLMLoop: ParsableCommand {
             var lastCharging : Bool? = nil
             var lastChargingCheckCount = 0
             
-            if CheckFirmwareSupport() {
-                operateMode = 10
-                print("Use firmware-based battery level limits, operateMode: \(operateMode).")
-            } else {
-                operateMode = GetSoftwareOperateMode()
-                print("Use software-based battery level limits, operateMode: \(operateMode).")
+            do {
+                try SMCKit.open()
+                print("SMC has opened!")
+                
+                if CheckFirmwareSupport() {
+                    operateMode = 10
+                    print("Use firmware-based battery level limits, operateMode: \(operateMode).")
+                } else {
+                    operateMode = GetSoftwareOperateMode()
+                    print("Use software-based battery level limits, operateMode: \(operateMode).")
+                }
+                
+                if CheckMagSafeSupport() {
+                    isMagSafeSupported = true
+                    print("Enabled MagSafe control.")
+                } else {
+                    isMagSafeSupported = false
+                    print("Disabled MagSafe control.")
+                }
+                
+                SMCKit.close()
+                print("SMC has closed!")
+            } catch {
+                print(error)
+                return
             }
-            
-            if CheckMagSafeSupport() {
-                isMagSafeSupported = true
-                print("Enabled MagSafe control.")
-            } else {
-                isMagSafeSupported = false
-                print("Disabled MagSafe control.")
-            }
-            
+
             signal(SIGUSR1) { _ in
                 _ = AllowChargeNow(status: true)
                 print("Received SIGUSR1 signal, enabled chargeNow.")
