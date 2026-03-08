@@ -14,6 +14,8 @@ It only supports Apple Silicon based Mac computers. macOS 26 and above may not b
 
 This project was forked from upstream (https://github.com/zackelia/bclm).
 
+BTW: In macOS 26.4 and above, there is no need to use bclm_loop. Please use the system's charging limit adjustment function.
+
 ## Installation
 
 ### Brew
