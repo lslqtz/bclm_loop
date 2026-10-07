@@ -13,6 +13,9 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
+    - name: Test
+      run: swift test --disable-sandbox
+
     - name: Build
       run: make build
 

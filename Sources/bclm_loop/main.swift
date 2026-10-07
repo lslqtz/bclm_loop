@@ -1,4 +1,5 @@
 import ArgumentParser
+import ChargeControlCore
 import Foundation
 import IOKit.ps
 import IOKit.pwr_mgt
@@ -211,7 +212,7 @@ struct BCLMLoop: ParsableCommand {
         @Argument(help: "The value to set (\(targetBatteryLevelRange[0])-\(targetBatteryLevelRange[1])). Firmware-based battery level limits are not supported if not set to \(defaultTargetBatteryLevel).")
         var targetBatteryLevel: Int = defaultTargetBatteryLevel
 
-        @Argument(help: "The value to set (\(targetBatteryMarginRange[0])-\(targetBatteryMarginRange[1])). Firmware-based battery level limits are not supported if not set to \(defaultBatteryLevelMargin).")
+        @Argument(help: "The value to set (\(targetBatteryMarginRange[0])-\(targetBatteryMarginRange[1])). Resume charging when the level reaches target minus this margin. Firmware-based battery level limits are not supported if not set to \(defaultBatteryLevelMargin).")
         var targetBatteryMargin: Int = defaultBatteryLevelMargin
 
         func validate() throws {
@@ -302,7 +303,7 @@ struct BCLMLoop: ParsableCommand {
             if operateMode == 10 {
                 return
             }
-            
+
             if operateMode == 1 {
                 if status {
                     try SMCKit.writeData(ch0j_key, data: ch0j_bytes_discharge)
@@ -318,7 +319,7 @@ struct BCLMLoop: ParsableCommand {
                 try SMCKit.writeData(ch0i_key, data: ch0i_bytes_charge)
             }
         }
-        
+
         func ChangeMagSafeLED(color: String) throws {
             if !isMagSafeSupported {
                 return
@@ -341,7 +342,10 @@ struct BCLMLoop: ParsableCommand {
             }
         }
         
-        func run() {
+        func run() throws {
+            let osSequoia = ChargeLimitPolicy.applies(to: ProcessInfo.processInfo.operatingSystemVersion)
+            let controlLock = osSequoia ? try acquireSequoiaControlLock() : nil
+            defer { if let descriptor = controlLock { close(descriptor) } }
             print("bclm_loop has started...")
 
             var pmStatus : IOReturn? = nil
@@ -354,6 +358,11 @@ struct BCLMLoop: ParsableCommand {
             var lastCharging : Bool? = nil
             var lastChargingCheckCount = 0
             
+            if osSequoia {
+                try runSequoiaChargeControl(target: targetBatteryLevel, margin: targetBatteryMargin)
+                return
+            }
+
             do {
                 try SMCKit.open()
                 print("SMC has opened!")
@@ -377,8 +386,8 @@ struct BCLMLoop: ParsableCommand {
                 SMCKit.close()
                 print("SMC has closed!")
             } catch {
-                print(error)
-                return
+                SMCKit.close()
+                throw error
             }
 
             signal(SIGUSR1) { _ in
@@ -405,7 +414,7 @@ struct BCLMLoop: ParsableCommand {
                             print("Detect chargeNow file, enabled chargeNow.")
                         }
                         // If already in battery level limit, some margin (targetBatteryMargin) is required to release the battery level limit.
-                        if chargeNow || (!lastLimit && currentBattLevelInt < targetBatteryLevel) || (lastLimit && currentBattLevelInt < (targetBatteryLevel - targetBatteryMargin)) {
+                        if chargeNow || (!lastLimit && currentBattLevelInt < targetBatteryLevel) || (lastLimit && currentBattLevelInt <= (targetBatteryLevel - targetBatteryMargin)) {
                             needLimit = false
                         }
                     } else if chargeNow {
@@ -507,7 +516,7 @@ struct BCLMLoop: ParsableCommand {
     struct ChargeNow: ParsableCommand {
         static let configuration = CommandConfiguration(
             commandName: "chargeNow",
-            abstract: "Send a command to bclm_loop to fully charge now. (Only available if bclm_loop is running and currently charging)")
+            abstract: "Request a temporary full charge while bclm_loop is running.")
 
         func validate() throws {
             try CheckPlatform()
@@ -515,7 +524,7 @@ struct BCLMLoop: ParsableCommand {
 
         func run() {
             if SetChargeNowFile(status: true) {
-                print("The command has been sent. If bclm_loop is running and currently charging, it should respond quickly.")
+                print("The command has been sent. If bclm_loop is running, it should respond quickly.")
             }
         }
     }
@@ -527,7 +536,7 @@ struct BCLMLoop: ParsableCommand {
         @Argument(help: "The value to set (\(targetBatteryLevelRange[0])-\(targetBatteryLevelRange[1])). Firmware-based battery level limits are not supported if not set to \(defaultTargetBatteryLevel).")
         var targetBatteryLevel: Int = defaultTargetBatteryLevel
     
-        @Argument(help: "The value to set (\(targetBatteryMarginRange[0])-\(targetBatteryMarginRange[1])). Firmware-based battery level limits are not supported if not set to \(defaultBatteryLevelMargin).")
+        @Argument(help: "The value to set (\(targetBatteryMarginRange[0])-\(targetBatteryMarginRange[1])). Resume charging when the level reaches target minus this margin. Firmware-based battery level limits are not supported if not set to \(defaultBatteryLevelMargin).")
         var targetBatteryMargin: Int = defaultBatteryLevelMargin
 
         func validate() throws {
