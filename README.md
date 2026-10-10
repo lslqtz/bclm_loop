@@ -6,7 +6,7 @@ The purpose of limiting the battery's max charge is to prolong battery health an
 
 To use it, Apple Optimized Battery Charging must be turned off. It will first try to use firmware based battery level limits on supported firmware.
 
-If the current battery level is higher than the target battery level, please manually discharge it to the target battery level or lower, otherwise it may only stay at the current battery level. This tool does not implement forced discharge because it may make the system unable to recognize the power adapter status.
+If the current battery level is higher than the target battery level, please manually discharge it to the target battery level or lower, otherwise it may only stay at the current battery level. With the newer `bf*` firmware interface, firmware may instead use battery power above the limit while plugged in. This tool does not implement forced discharge because it may make the system unable to recognize the power adapter status.
 
 When the battery is no longer charging (for any reason, including but not limited to reaching the target battery level or insufficient power from the power adapter), MagSafe LED will turn green, which may be inconsistent with system behavior (which only turn green when fully charged).
 
@@ -86,3 +86,9 @@ Likewise, this command can also unpersist by unloading the service and removing 
 ```
 $ sudo bclm_loop unpersist
 ```
+
+## New SMC firmware limits
+
+When `bfF0` / `bfD0` / `bfE0` are accessible, the existing loop uses firmware mode 11. `loop 80 5` sets an 80% upper limit and a 75% lower limit; firmware manages the band, including during sleep. Every write is read back, partial failures disable the limit, and configuration resets are corrected on the next poll. Above the limit, firmware may use battery power even while an adapter is connected; passive holding is not guaranteed.
+
+`chargeNow` temporarily disables the limit until full charge or unplugging. SIGINT/SIGTERM and runtime errors disable the new firmware limit; forced termination cannot run cleanup. If the new keys are inaccessible, the original CHWA/CHTE/CH0B/CH0C selection is retained. On macOS 15.8 and later, empty legacy placeholders are rejected. Model-specific hardware validation is still required.

@@ -12,11 +12,7 @@ let package = Package(
         .target(
             name: "bclm_loop",
             dependencies: [
-                .product(name: "ArgumentParser", package: "swift-argument-parser"),
-                "ChargeControlCore", "CPowerUIBridge"
+                .product(name: "ArgumentParser", package: "swift-argument-parser")
             ]),
-        .target(name: "ChargeControlCore"),
-        .target(name: "CPowerUIBridge", linkerSettings: [.linkedFramework("Foundation")]),
-        .testTarget(name: "ChargeControlCoreTests", dependencies: ["ChargeControlCore"]),
     ]
 )
